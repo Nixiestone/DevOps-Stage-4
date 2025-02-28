@@ -1,6 +1,9 @@
 services:
   frontend:
     build: ./frontend
+    environment:
+      - AUTH_API_ADDRESS=http://auth-api:8081
+      - TODOS_API_ADDRESS=http://todos-api:8082
     ports:
       - "8080:8080"
     depends_on:
@@ -9,7 +12,7 @@ services:
       - users-api
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=Host(`localhost`)"
+      - "traefik.http.routers.frontend.rule=Host(`nixietodo.duckdns.org`)"
       - "traefik.http.routers.frontend.entrypoints=web"
       - "traefik.http.services.frontend.loadbalancer.server.port=8080"
       - "traefik.http.middlewares.websocket-headers.headers.customrequestheaders.Upgrade=websocket"
@@ -20,19 +23,31 @@ services:
     ports:
       - "8081:8081"
     environment:
-      - USERS_API_ADDRESS=http://users-api:8083
+       - AUTH_API_PORT=${AUTH_API_PORT}
+       - JWT_SECRET=${JWT_SECRET}
+       - USERS_API_ADDRESS=${USERS_API_ADDRESS}
+    depends_on:
+      - users-api
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.auth-api.rule=Host(`auth.localhost`)"
+      - "traefik.http.routers.auth-api.rule=Host(`auth.nixietodo.duckdns.org`)"
       - "traefik.http.services.auth-api.loadbalancer.server.port=8081"
       - "traefik.http.routers.auth-api.entrypoints=web"
   todos-api:
     build: ./todos-api
     ports:
       - "8082:8082"
+    environment:
+      - TODOS_API_PORT=8082:8082
+      - JWT_SECRET=${JWT_SECRET}
+      - REDIS_HOST=redis
+      - REDIS_PORT= 6379
+      - REDIS_CHANNEL=${REDIS_CHANNEL}
+    depends_on:
+      - redis
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.todos-api.rule=Host(`todos.localhost`)"
+      - "traefik.http.routers.todos-api.rule=Host(`todos.nixietodo.duckdns.org`)"
       - "traefik.http.services.todos-api.loadbalancer.server.port=8082"
       - "traefik.http.routers.todos-api.entrypoints=web"
   users-api:
@@ -41,13 +56,15 @@ services:
       - "8083:8083"
     environment:
       - JAVA_OPTS=--add-opens java.base/java.lang=ALL-UNNAMED
+      - SERVER_PORT=${SERVER_PORT}
+      - JWT_SECRET=${JWT_SECRET}
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.users-api.rule=Host(`users.localhost`)"
+      - "traefik.http.routers.users-api.rule=Host(`users.nixietodo.duckdns.org`)"
       - "traefik.http.services.users-api.loadbalancer.server.port=8083"
       - "traefik.http.routers.users-api.entrypoints=web"
-  log-processor:
-    build: ./log-processor
+  log-message-processor:
+    build: ./log-message-processor
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
@@ -71,7 +88,7 @@ services:
       - "443:443"
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.traefik.rule=Host(`traefik.localhost`)"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.nixietodo.duckdns.org`)"
       - "traefik.http.routers.traefik.service=api@internal"
       - "traefik.http.routers.traefik.entrypoints=web"  # Traefik dashboard
     volumes:

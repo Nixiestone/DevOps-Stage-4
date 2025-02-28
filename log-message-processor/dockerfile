@@ -20,5 +20,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy app code
 COPY . .
 EXPOSE 8084
-# Run the log processor
+# Run the log message processor
 CMD ["python", "main.py"]

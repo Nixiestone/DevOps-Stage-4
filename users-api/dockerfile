@@ -9,6 +9,6 @@ FROM eclipse-temurin:8-jdk-alpine
 WORKDIR /app
 # Correct the path to the JAR file — it should match the build directory inside the first stage
 COPY --from=build-stage /app/target/users-api-0.0.1-SNAPSHOT.jar users-api.jar
-EXPOSE 8083
+EXPOSE 8081
 # Remove the extra space in "users-api.jar " (was causing a file-not-found error)
 CMD ["java", "-jar", "users-api.jar"]
