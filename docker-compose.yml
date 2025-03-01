@@ -1,4 +1,3 @@
-version: "3.8"
 services:
   traefik:
     image: "traefik:v2.10"
@@ -91,7 +90,7 @@ services:
   users-api:
     build: ./users-api
     ports:
-      - "8083:8080"
+      - "8083:8083"
     environment:
       - SERVER_PORT=8083
       - JWT_SECRET=myfancysecret
