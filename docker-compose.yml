@@ -1,95 +1,129 @@
+version: "3.8"
 services:
+  traefik:
+    image: "traefik:v2.10"
+    container_name: "traefik"
+    command:
+      - "--log.level=DEBUG"
+      - "--api.insecure=false"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--certificatesresolvers.letsencryptresolver.acme.httpchallenge=true"
+      - "--certificatesresolvers.letsencryptresolver.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.letsencryptresolver.acme.email=admin@nixiemicroservices.duckdns.org"
+      - "--certificatesresolvers.letsencryptresolver.acme.storage=/etc/traefik/acme.json"
+      - "--providers.docker.defaultRule=Host(`nixiemicroservices.duckdns.org`)"
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - web
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - traefik-certificates:/etc/traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.middlewares.cors.headers.accesscontrolalloworiginlist=*"
+      - "traefik.http.middlewares.cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS"
+      - "traefik.http.middlewares.cors.headers.accesscontrolallowheaders=Content-Type,Authorization"
+      - "traefik.http.middlewares.cors.headers.accesscontrolmaxage=100"
+      - "traefik.http.middlewares.cors.headers.addvaryheader=true"
   frontend:
     build: ./frontend
+    ports:
+      - "8080:8080"
     environment:
       - AUTH_API_ADDRESS=http://auth-api:8081
       - TODOS_API_ADDRESS=http://todos-api:8082
-    ports:
-      - "8080:8080"
     depends_on:
       - auth-api
       - todos-api
       - users-api
+    networks:
+      - web
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=Host(`nixietodo.duckdns.org`)"
-      - "traefik.http.routers.frontend.entrypoints=web"
+      - "traefik.http.routers.frontend.rule=Host(`nixiemicroservices.duckdns.org`)"
+      - "traefik.http.routers.frontend.entrypoints=websecure"
+      - "traefik.http.routers.frontend.tls.certresolver=letsencryptresolver"
       - "traefik.http.services.frontend.loadbalancer.server.port=8080"
-      - "traefik.http.middlewares.websocket-headers.headers.customrequestheaders.Upgrade=websocket"
-      - "traefik.http.middlewares.websocket-headers.headers.customrequestheaders.Connection=Upgrade"
-      - "traefik.http.routers.frontend.middlewares=websocket-headers"
   auth-api:
     build: ./auth-api
     ports:
       - "8081:8081"
     environment:
-       - AUTH_API_PORT=${AUTH_API_PORT}
-       - JWT_SECRET=${JWT_SECRET}
-       - USERS_API_ADDRESS=${USERS_API_ADDRESS}
+      - AUTH_API_PORT=8081
+      - JWT_SECRET=myfancysecret
+      - USERS_API_ADDRESS=http://users-api:8083
     depends_on:
       - users-api
+    networks:
+      - web
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.auth-api.rule=Host(`auth.nixietodo.duckdns.org`)"
+      - "traefik.http.routers.auth-api.rule=Host(`nixiemicroservices.duckdns.org`) && PathPrefix(`/api/auth`)"
+      - "traefik.http.routers.auth-api.entrypoints=websecure"
+      - "traefik.http.routers.auth-api.tls.certresolver=letsencryptresolver"
       - "traefik.http.services.auth-api.loadbalancer.server.port=8081"
-      - "traefik.http.routers.auth-api.entrypoints=web"
   todos-api:
     build: ./todos-api
     ports:
       - "8082:8082"
     environment:
-      - TODOS_API_PORT=8082:8082
-      - JWT_SECRET=${JWT_SECRET}
-      - REDIS_HOST=redis
-      - REDIS_PORT= 6379
-      - REDIS_CHANNEL=${REDIS_CHANNEL}
+      - JWT_SECRET=myfancysecret
+      - REDIS_HOST=redis-queue
+      - REDIS_PORT=6379
+      - REDIS_CHANNEL=log_channel
     depends_on:
-      - redis
+      - redis-queue
+    networks:
+      - web
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.todos-api.rule=Host(`todos.nixietodo.duckdns.org`)"
+      - "traefik.http.routers.todos-api.rule=Host(`nixiemicroservices.duckdns.org`) && PathPrefix(`/api/todos`)"
+      - "traefik.http.routers.todos-api.entrypoints=websecure"
+      - "traefik.http.routers.todos-api.tls.certresolver=letsencryptresolver"
       - "traefik.http.services.todos-api.loadbalancer.server.port=8082"
-      - "traefik.http.routers.todos-api.entrypoints=web"
   users-api:
     build: ./users-api
     ports:
-      - "8083:8083"
+      - "8083:8080"
     environment:
-      - JAVA_OPTS=--add-opens java.base/java.lang=ALL-UNNAMED
-      - SERVER_PORT=${SERVER_PORT}
-      - JWT_SECRET=${JWT_SECRET}
+      - SERVER_PORT=8083
+      - JWT_SECRET=myfancysecret
+    networks:
+      - web
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.users-api.rule=Host(`users.nixietodo.duckdns.org`)"
+      - "traefik.http.routers.users-api.rule=Host(`nixiemicroservices.duckdns.org`) && PathPrefix(`/api/users`)"
+      - "traefik.http.routers.users-api.entrypoints=websecure"
+      - "traefik.http.routers.users-api.tls.certresolver=letsencryptresolver"
       - "traefik.http.services.users-api.loadbalancer.server.port=8083"
-      - "traefik.http.routers.users-api.entrypoints=web"
-  log-message-processor:
+  log-processor:
     build: ./log-message-processor
     environment:
-      - REDIS_HOST=redis
+      - REDIS_HOST=redis-queue
       - REDIS_PORT=6379
       - REDIS_CHANNEL=log_channel
-      - ZIPKIN_URL=http://zipkin:9411/api/v2/spans
     depends_on:
-      - redis
-  redis:
+      - redis-queue
+    networks:
+      - web
+  redis-queue:
     image: redis:alpine
     ports:
       - "6379:6379"
-  traefik:
-    image: traefik:v2.5
-    command:
-      - "--api.insecure=true"
-      - "--providers.docker=true"
-      - "--entrypoints.web.address=:80"
-      - "--entrypoints.websecure.address=:443"
-    ports:
-      - "80:80"
-      - "443:443"
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.traefik.rule=Host(`traefik.nixietodo.duckdns.org`)"
-      - "traefik.http.routers.traefik.service=api@internal"
-      - "traefik.http.routers.traefik.entrypoints=web"  # Traefik dashboard
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - redis-data:/data
+    networks:
+      - web
+networks:
+  web:
+    driver: bridge
+volumes:
+  traefik-certificates:
+  redis-data:
